@@ -1,7 +1,7 @@
 # Build outputs
-SimpleTranslatorCS/bin/
-SimpleTranslatorCS/obj/
-SimpleTranslatorCS/dist/
+bin/
+obj/
+dist/
 
 # IDE settings
 .vs/

@@ -18,7 +18,7 @@ public record ModMetadata : AbstractModMetadata
 {
     public override string ModGuid { get; init; } = "com.simple.translator.cs";
     public override string Name { get; init; } = "SimpleTranslatorCS";
-    public override string Author { get; init; } = "volcano";
+    public override string Author { get; init; } = "MiKueYu";
     public override List<string>? Contributors { get; init; }
     public override SemanticVersioning.Version Version { get; init; } = new("1.1.1");
     public override SemanticVersioning.Range SptVersion { get; init; } = new("~4.0.0");
@@ -56,7 +56,7 @@ public class SimpleTranslator(
             var localePath = Path.Combine(modPath, "db", "locales", locale);
             if (!Directory.Exists(localePath))
             {
-                logger.Info($"[文本汉化]未找到汉化文件夹目录: {locale}, 请检查是否在 user/mods/zzzzz-simple-translator/db/locales 中已经创建 ch 文件夹");
+                logger.Info($"[文本汉化]未找到汉化文件夹目录: {locale}, 请检查是否在 SPT/user/mods/SimpleTranslatorCS/db/locales 中已经创建 ch 文件夹");
                 continue;
             }
 
