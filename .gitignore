@@ -1,0 +1,30 @@
+# Build outputs
+SimpleTranslatorCS/bin/
+SimpleTranslatorCS/obj/
+SimpleTranslatorCS/dist/
+
+# IDE settings
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Logs and cache
+*.log
+*.cache
+
+# OS-specific files
+Thumbs.db
+ehthumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+
+# NuGet
+**/packages/
+*.nupkg
+
+# Publish artifacts (keep only in releases, not in repo)
+*.zip

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>SimpleTranslatorCS</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+    <Version>1.1.1</Version>
+    <OutputPath>bin\$(Configuration)\$(ProjectName)\$(AssemblyName)\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SPTarkov.Common" Version="4.0.0" />
+    <PackageReference Include="SPTarkov.DI" Version="4.0.0" />
+    <PackageReference Include="SPTarkov.Server.Core" Version="4.0.0" />
+    <PackageReference Include="fastJSON5" Version="1.0.2" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <DistDir>$(MSBuildProjectDirectory)\dist</DistDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ChFiles Include="$(MSBuildProjectDirectory)\db\locales\ch\**\*.*" />
+  </ItemGroup>
+
+  <Target Name="CopyToDist" AfterTargets="Build">
+    <MakeDir Directories="$(DistDir)\db\locales\ch" />
+    <Copy SourceFiles="$(TargetDir)SimpleTranslatorCS.dll" DestinationFolder="$(DistDir)" />
+    <Copy SourceFiles="$(TargetDir)fastJSON5.dll" DestinationFolder="$(DistDir)" />
+    <Copy SourceFiles="@(ChFiles)" DestinationFiles="@(ChFiles->'$(DistDir)\db\locales\ch\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+</Project>
