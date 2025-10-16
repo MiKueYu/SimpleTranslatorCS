@@ -28,3 +28,4 @@ ehthumbs.db
 
 # Publish artifacts (keep only in releases, not in repo)
 *.zip
+server-mod-examples/
