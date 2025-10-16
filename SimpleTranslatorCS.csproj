@@ -33,4 +33,7 @@
     <Copy SourceFiles="$(TargetDir)fastJSON5.dll" DestinationFolder="$(DistDir)" />
     <Copy SourceFiles="@(ChFiles)" DestinationFiles="@(ChFiles->'$(DistDir)\db\locales\ch\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
+  <ItemGroup>
+    <Compile Remove="server-mod-examples\**\*.cs" />
+  </ItemGroup>
 </Project>

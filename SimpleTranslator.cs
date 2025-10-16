@@ -8,6 +8,7 @@ using SPTarkov.Server.Core.Models.Logging;
 using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
+using SPTarkov.Server.Core.Services;
 
 using fastJSON5;
 
@@ -34,7 +35,8 @@ public record ModMetadata : AbstractModMetadata
 public class SimpleTranslator(
     ISptLogger<SimpleTranslator> logger,
     DatabaseServer databaseServer,
-    ModHelper modHelper) : IOnLoad
+    ModHelper modHelper,
+    LocaleService localeService) : IOnLoad
 {
     public Task OnLoad()
     {
@@ -98,7 +100,9 @@ public class SimpleTranslator(
                 }
 
                 var totalFields = content.Count;
-                var coveredFields = content.Count;
+                // 使用英文(en)字典作为参考来计算覆盖字段数
+                var referenceLocales = localeService.GetLocaleDb("en");
+                var coveredFields = content.Keys.Count(k => referenceLocales.ContainsKey(k));
 
 
 
