@@ -38,6 +38,11 @@ public class SimpleTranslator(
     ModHelper modHelper,
     LocaleService localeService) : IOnLoad
 {
+    // 预编译正则表达式以提高性能
+    private static readonly Regex JsonTrailingCommaRegex = new(@",\s*(\}|\])", RegexOptions.Compiled);
+    private static readonly Regex JsonBlockCommentRegex = new(@"/\*[\s\S]*?\*/", RegexOptions.Compiled);
+    private static readonly Regex JsonLineCommentRegex = new(@"^\s*//.*$", RegexOptions.Compiled | RegexOptions.Multiline);
+
     public Task OnLoad()
     {
         var tables = databaseServer.GetTables();
@@ -67,33 +72,7 @@ public class SimpleTranslator(
             {
                 loadedFileCount++;
 
-                Dictionary<string, string>? content = null;
-                var ext = Path.GetExtension(file).ToLowerInvariant();
-                var raw = File.ReadAllText(file);
-
-                try
-                {
-                    if (ext == ".json")
-                    {
-                        content = JsonSerializer.Deserialize<Dictionary<string, string>>(raw);
-                    }
-                    else if (ext == ".json5")
-                    {
-                        content = JSON5.ToObject<Dictionary<string, string>>(raw);
-                    }
-                    else if (ext == ".jsonc")
-                    {
-                        var noComments = StripJsonComments(raw);
-                        var normalized = Regex.Replace(noComments, @",\s*(\}|\])", "$1");
-                        content = JsonSerializer.Deserialize<Dictionary<string, string>>(normalized);
-                    }
-                }
-                catch
-                {
-                    // 解析错误时跳过该文件
-                    continue;
-                }
-
+                var content = ParseFileContent(file, logger);
                 if (content == null || content.Count == 0)
                 {
                     continue;
@@ -103,8 +82,6 @@ public class SimpleTranslator(
                 // 使用英文(en)字典作为参考来计算覆盖字段数
                 var referenceLocales = localeService.GetLocaleDb("en");
                 var coveredFields = content.Keys.Count(k => referenceLocales.ContainsKey(k));
-
-
 
                 // 目标语言容器必须存在
                 if (!tables.Locales.Global.TryGetValue(locale, out var lazyTarget))
@@ -150,6 +127,147 @@ public class SimpleTranslator(
             }
         }
 
+        LogStatistics(loadedFileCount, serverLocales, addedLocalesCountByLang, fullyCoveredFiles, partiallyCoveredFiles, nonCoveredFiles, logger);
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// 解析文件内容，支持 JSON、JSON5 和 JSONC 格式
+    /// </summary>
+    private static Dictionary<string, string>? ParseFileContent(string filePath, ISptLogger<SimpleTranslator> logger)
+    {
+        try
+        {
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+            var raw = File.ReadAllText(filePath);
+
+            return ext switch
+            {
+                ".json" => JsonSerializer.Deserialize<Dictionary<string, string>>(raw),
+                ".json5" => JSON5.ToObject<Dictionary<string, string>>(raw),
+                ".jsonc" => ParseJsoncContent(raw),
+                _ => null
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"[文本汉化]解析文件失败: {filePath}, 错误: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 安全地解析 JSONC 内容，先剥离注释再移除尾随逗号
+    /// </summary>
+    private static Dictionary<string, string>? ParseJsoncContent(string rawContent)
+    {
+        var noComments = StripJsonComments(rawContent);
+        var normalized = JsonTrailingCommaRegex.Replace(noComments, "$1");
+        return JsonSerializer.Deserialize<Dictionary<string, string>>(normalized);
+    }
+
+    /// <summary>
+    /// 安全地剥离 JSON/JSONC 中的注释
+    /// 这个实现通过逐字符解析来避免正则表达式在复杂JSON结构中的问题
+    /// </summary>
+    private static string StripJsonComments(string input)
+    {
+        var result = new System.Text.StringBuilder();
+        var inString = false;
+        var inBlockComment = false;
+        var inLineComment = false;
+        var escapeNext = false;
+
+        for (int i = 0; i < input.Length; i++)
+        {
+            char current = input[i];
+            char next = i + 1 < input.Length ? input[i + 1] : '\0';
+
+            if (escapeNext)
+            {
+                result.Append(current);
+                escapeNext = false;
+                continue;
+            }
+
+            if (current == '\\' && inString)
+            {
+                result.Append(current);
+                escapeNext = true;
+                continue;
+            }
+
+            if (!inString && !inBlockComment && !inLineComment)
+            {
+                if (current == '/' && next == '/')
+                {
+                    inLineComment = true;
+                    i++; // 跳过下一个字符 '/'
+                    continue;
+                }
+                if (current == '/' && next == '*')
+                {
+                    inBlockComment = true;
+                    i++; // 跳过下一个字符 '*'
+                    continue;
+                }
+                if (current == '"')
+                {
+                    inString = true;
+                    result.Append(current);
+                    continue;
+                }
+            }
+            else if (inString)
+            {
+                if (current == '"')
+                {
+                    inString = false;
+                }
+                result.Append(current);
+                continue;
+            }
+            else if (inBlockComment)
+            {
+                if (current == '*' && next == '/')
+                {
+                    inBlockComment = false;
+                    i++; // 跳过下一个字符 '/'
+                    continue;
+                }
+                // 注释内容不添加到结果中
+                continue;
+            }
+            else if (inLineComment)
+            {
+                if (current == '\n' || current == '\r')
+                {
+                    inLineComment = false;
+                    result.Append(current); // 保留换行符以保持行号
+                }
+                // 注释内容不添加到结果中
+                continue;
+            }
+
+            result.Append(current);
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// 记录和显示统计信息
+    /// </summary>
+    private static void LogStatistics(
+        int loadedFileCount,
+        string[] serverLocales,
+        Dictionary<string, int> addedLocalesCountByLang,
+        List<string> fullyCoveredFiles,
+        List<(string fileName, int covered, int total)> partiallyCoveredFiles,
+        List<string> nonCoveredFiles,
+        ISptLogger<SimpleTranslator> logger)
+    {
         logger.Info($"[文本汉化]总计 [{loadedFileCount}] 个汉化文本文件加载");
 
         foreach (var locale in serverLocales)
@@ -188,18 +306,5 @@ public class SimpleTranslator(
             }
             logger.Info(string.Empty);
         }
-
-        return Task.CompletedTask;
     }
-
-    // 简单的 JSONC 注释剥离：移除 // 行注释 与 /* */ 块注释
-    private static string StripJsonComments(string input)
-    {
-        // 注意：这不是完全语法安全的实现，但足以处理常见 JSONC 场景
-        var noBlock = Regex.Replace(input, @"/\*[\s\S]*?\*/", string.Empty);
-        var noLine = Regex.Replace(noBlock, @"^\s*//.*$", string.Empty, RegexOptions.Multiline);
-        return noLine;
-    }
-
-
 }
