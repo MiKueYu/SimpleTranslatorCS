@@ -9,6 +9,7 @@ using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Utils;
 using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
+using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 
 using fastJSON5;
 
@@ -36,7 +37,8 @@ public class SimpleTranslator(
     ISptLogger<SimpleTranslator> logger,
     DatabaseServer databaseServer,
     ModHelper modHelper,
-    LocaleService localeService) : IOnLoad
+    LocaleService localeService,
+    DatabaseService databaseService) : IOnLoad
 {
     // 预编译正则表达式以提高性能
     private static readonly Regex JsonTrailingCommaRegex = new(@",\s*(\}|\])", RegexOptions.Compiled);
@@ -60,7 +62,7 @@ public class SimpleTranslator(
         var modPath = modHelper.GetAbsolutePathToModFolder(Assembly.GetExecutingAssembly());
         foreach (var locale in serverLocales)
         {
-            var localePath = Path.Combine(modPath, "db", "locales", locale);
+            var localePath = System.IO.Path.Combine(modPath, "db", "locales", locale);
             if (!Directory.Exists(localePath))
             {
                 logger.Info($"[文本汉化]未找到汉化文件夹目录: {locale}, 请检查是否在 SPT/user/mods/SimpleTranslatorCS/db/locales 中已经创建 ch 文件夹");
@@ -68,7 +70,8 @@ public class SimpleTranslator(
             }
 
             foreach (var file in Directory.EnumerateFiles(localePath, "*.*", SearchOption.AllDirectories)
-                         .Where(f => new[] { ".json", ".json5", ".jsonc" }.Contains(Path.GetExtension(f).ToLowerInvariant())))
+                         .Where(f => new[] { ".json", ".json5", ".jsonc" }.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
+                         .Where(f => !f.Contains("\\dialogue\\") && !f.Contains("/dialogue/")))  // 排除 dialogue 目录
             {
                 loadedFileCount++;
 
@@ -111,7 +114,7 @@ public class SimpleTranslator(
                 }
                 addedLocalesCountByLang[locale] += coveredFields;
 
-                var fileName = Path.GetFileName(file);
+                var fileName = System.IO.Path.GetFileName(file);
                 if (coveredFields == 0)
                 {
                     nonCoveredFiles.Add(fileName);
@@ -129,6 +132,9 @@ public class SimpleTranslator(
 
         LogStatistics(loadedFileCount, serverLocales, addedLocalesCountByLang, fullyCoveredFiles, partiallyCoveredFiles, nonCoveredFiles, logger);
 
+        // 处理 dialogue 本地化
+        LoadDialogueLocalizations(modPath, serverLocales, logger);
+
         return Task.CompletedTask;
     }
 
@@ -139,7 +145,7 @@ public class SimpleTranslator(
     {
         try
         {
-            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+            var ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
             var raw = File.ReadAllText(filePath);
 
             return ext switch
@@ -305,6 +311,115 @@ public class SimpleTranslator(
                 logger.Info($"  - {f}");
             }
             logger.Info(string.Empty);
+        }
+    }
+
+    /// <summary>
+    /// 加载并应用 dialogue 本地化文本
+    /// </summary>
+    private void LoadDialogueLocalizations(string modPath, string[] serverLocales, ISptLogger<SimpleTranslator> logger)
+    {
+        try
+        {
+            foreach (var locale in serverLocales)
+            {
+                var dialoguePath = System.IO.Path.Combine(modPath, "db", "locales", locale, "dialogue");
+                if (!Directory.Exists(dialoguePath))
+                {
+                    continue;
+                }
+
+                var dialogueFiles = Directory.EnumerateFiles(dialoguePath, "*.json*", SearchOption.AllDirectories)
+                    .Where(f => new[] { ".json", ".json5", ".jsonc" }.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
+                    .ToList();
+
+                var updatedDialogueCount = 0;
+                var updatedTextCount = 0;
+
+                // 首先收集所有文件的内容
+                var dialogueLocalizations = new Dictionary<string, string>();
+                foreach (var file in dialogueFiles)
+                {
+                    var content = ParseFileContent(file, logger);
+                    if (content == null || content.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    // 合并所有文件的文本（后面的文件会覆盖前面的）
+                    foreach (var kvp in content)
+                    {
+                        dialogueLocalizations[kvp.Key] = kvp.Value;
+                    }
+                }
+
+                if (dialogueLocalizations.Count == 0)
+                {
+                    continue;
+                }
+
+                var dialogue = databaseService.GetTemplates().Dialogue;
+                if (dialogue?.Elements == null)
+                {
+                    logger.Warning("[Dialogue本地化]无法获取 dialogue 数据");
+                    continue;
+                }
+
+                // 遍历所有 dialogue elements，只更新目标语言的文本
+                foreach (var element in dialogue.Elements)
+                {
+                    if (element.LocalizationDictionary == null)
+                    {
+                        element.LocalizationDictionary = new Dictionary<string, Dictionary<string, string>>();
+                    }
+
+                    if (!element.LocalizationDictionary.TryGetValue(locale, out var localeDict))
+                    {
+                        localeDict = new Dictionary<string, string>();
+                        element.LocalizationDictionary[locale] = localeDict;
+                    }
+
+                    var originalCount = localeDict.Count;
+                    var textsUpdated = 0;
+                    
+                    // 只更新匹配的文本ID（如果 element 的 localization 中有这些文本ID）
+                    foreach (var kvp in dialogueLocalizations)
+                    {
+                        // 检查当前 element 的 localization 中是否存在这个文本ID（任意语言都可以）
+                        bool textExists = false;
+                        foreach (var existingLocale in element.LocalizationDictionary.Keys)
+                        {
+                            if (element.LocalizationDictionary[existingLocale].ContainsKey(kvp.Key))
+                            {
+                                textExists = true;
+                                break;
+                            }
+                        }
+
+                        // 如果文本ID存在于任意语言的 localization 中，则更新目标语言的翻译
+                        if (textExists)
+                        {
+                            localeDict[kvp.Key] = kvp.Value;
+                            textsUpdated++;
+                        }
+                    }
+
+                    if (textsUpdated > 0)
+                    {
+                        updatedDialogueCount++;
+                        updatedTextCount += textsUpdated;
+                    }
+                }
+
+                if (updatedDialogueCount > 0)
+                {
+                    logger.Info($"[Dialogue本地化] {locale}: 更新了 {updatedDialogueCount} 个对话元素，共 {updatedTextCount} 条文本");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Error($"[Dialogue本地化]处理失败: {ex.Message}");
         }
     }
 }

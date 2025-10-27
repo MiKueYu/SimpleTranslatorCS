@@ -35,5 +35,10 @@
   </Target>
   <ItemGroup>
     <Compile Remove="server-mod-examples\**\*.cs" />
+    <Compile Remove="server-csharp\**\*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Remove="server-csharp\**\*" />
+    <Content Remove="server-mod-examples\**\*" />
   </ItemGroup>
 </Project>
