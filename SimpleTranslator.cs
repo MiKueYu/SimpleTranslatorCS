@@ -13,7 +13,6 @@ using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 
 using fastJSON5;
 
-
 namespace SimpleTranslatorCS;
 
 public record ModMetadata : AbstractModMetadata
