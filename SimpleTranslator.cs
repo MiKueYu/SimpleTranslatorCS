@@ -13,7 +13,6 @@ using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 
 using fastJSON5;
 
-
 namespace SimpleTranslatorCS;
 
 public record ModMetadata : AbstractModMetadata
@@ -96,32 +95,14 @@ public class SimpleTranslator(
                 // 在目标语言上追加 transformer 以合并我们的更改（加入空字典保护）
                 lazyTarget.AddTransformer(targetDict =>
                 {
-                    if (targetDict == null) targetDict = new Dictionary<string, string>();
-
-                    // 快照英文表（localeService）
-                    var enDict = localeService.GetLocaleDb("en");
+                    if (targetDict == null)
+                    {
+                        targetDict = new Dictionary<string, string>();
+                    }
 
                     foreach (var kvp in content)
                     {
-                        var key = kvp.Key;
-                        var zh = kvp.Value;
-
-                        // en 白名单：不包含此键key则跳过
-                        var enVal = string.Empty;
-                        var hasEn = enDict != null && enDict.TryGetValue(key, out enVal);
-                        if (!hasEn) continue;
-
-                        // 检测 ch 键值为空 或与 en 键值相同
-                        var cur = string.Empty;
-                        var hasCur = targetDict.TryGetValue(key, out cur);
-                        var isEmpty = !hasCur || string.IsNullOrWhiteSpace(cur);
-                        var isStillEnglish = hasCur && cur == enVal; 
-
-                        if(isEmpty || isStillEnglish)
-                        {
-                            targetDict[key] = zh;
-                        }
-                        // 保留中文（不进行覆盖操作）
+                        targetDict[kvp.Key] = kvp.Value;
                     }
                     return targetDict;
                 });
@@ -399,7 +380,7 @@ public class SimpleTranslator(
 
                     var originalCount = localeDict.Count;
                     var textsUpdated = 0;
-                    
+
                     // 只更新匹配的文本ID（如果 element 的 localization 中有这些文本ID）
                     foreach (var kvp in dialogueLocalizations)
                     {
