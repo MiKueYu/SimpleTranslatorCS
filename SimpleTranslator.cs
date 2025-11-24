@@ -11,8 +11,6 @@ using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 
-using fastJSON5;
-
 namespace SimpleTranslatorCS;
 
 public record ModMetadata : AbstractModMetadata
@@ -69,7 +67,7 @@ public class SimpleTranslator(
             }
 
             foreach (var file in Directory.EnumerateFiles(localePath, "*.*", SearchOption.AllDirectories)
-                         .Where(f => new[] { ".json", ".json5", ".jsonc" }.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
+                         .Where(f => new[] { ".json", ".jsonc" }.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
                          .Where(f => !f.Contains("\\dialogue\\") && !f.Contains("/dialogue/")))  // 排除 dialogue 目录
             {
                 loadedFileCount++;
@@ -138,7 +136,7 @@ public class SimpleTranslator(
     }
 
     /// <summary>
-    /// 解析文件内容，支持 JSON、JSON5 和 JSONC 格式
+    /// 解析文件内容，支持 JSON 和 JSONC 格式
     /// </summary>
     private static Dictionary<string, string>? ParseFileContent(string filePath, ISptLogger<SimpleTranslator> logger)
     {
@@ -150,7 +148,6 @@ public class SimpleTranslator(
             return ext switch
             {
                 ".json" => JsonSerializer.Deserialize<Dictionary<string, string>>(raw),
-                ".json5" => JSON5.ToObject<Dictionary<string, string>>(raw),
                 ".jsonc" => ParseJsoncContent(raw),
                 _ => null
             };
@@ -329,7 +326,7 @@ public class SimpleTranslator(
                 }
 
                 var dialogueFiles = Directory.EnumerateFiles(dialoguePath, "*.json*", SearchOption.AllDirectories)
-                    .Where(f => new[] { ".json", ".json5", ".jsonc" }.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
+                    .Where(f => new[] { ".json", ".jsonc" }.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
                     .ToList();
 
                 var updatedDialogueCount = 0;
