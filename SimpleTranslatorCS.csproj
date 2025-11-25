@@ -13,7 +13,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="fastJSON5" Version="1.0.4" />
     <PackageReference Include="SPTarkov.Common" Version="4.0.3" />
     <PackageReference Include="SPTarkov.DI" Version="4.0.3" />
     <PackageReference Include="SPTarkov.Server.Core" Version="4.0.3" />
@@ -30,7 +29,6 @@
   <Target Name="CopyToDist" AfterTargets="Build">
     <MakeDir Directories="$(DistDir)\db\locales\ch" />
     <Copy SourceFiles="$(TargetDir)SimpleTranslatorCS.dll" DestinationFolder="$(DistDir)" />
-    <Copy SourceFiles="$(TargetDir)fastJSON5.dll" DestinationFolder="$(DistDir)" />
     <Copy SourceFiles="@(ChFiles)" DestinationFiles="@(ChFiles->'$(DistDir)\db\locales\ch\%(RecursiveDir)%(Filename)%(Extension)')" />
   </Target>
   <ItemGroup>

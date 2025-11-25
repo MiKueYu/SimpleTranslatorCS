@@ -11,8 +11,6 @@ using SPTarkov.Server.Core.Servers;
 using SPTarkov.Server.Core.Services;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 
-using fastJSON5;
-
 namespace SimpleTranslatorCS;
 
 public record ModMetadata : AbstractModMetadata
@@ -150,7 +148,7 @@ public class SimpleTranslator(
             return ext switch
             {
                 ".json" => JsonSerializer.Deserialize<Dictionary<string, string>>(raw),
-                ".json5" => JSON5.ToObject<Dictionary<string, string>>(raw),
+                ".json5" => ParseJsoncContent(raw),
                 ".jsonc" => ParseJsoncContent(raw),
                 _ => null
             };
